@@ -1,4 +1,4 @@
-This project is the backend for a deployment system (a Vercel-like clone).
+This project is for a deployment system (a Vercel-like clone).
 Users can register, link GitHub repos, and deploy projects. The system runs builds inside AWS ECS, uploads static assets to S3, and serves them via a reverse proxy.
 
 📌 Features
