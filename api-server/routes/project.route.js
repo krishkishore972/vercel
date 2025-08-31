@@ -5,6 +5,7 @@ import { createProject, deployProject, getLogs } from "../controller/project.con
 const router = express.Router();
 
 router.post("/",createProject)
+
 router.post("/deploy",deployProject);
 router.get("/logs/:id",getLogs);
 

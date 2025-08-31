@@ -1,20 +1,29 @@
 import express from "express";
 import cors from "cors";
-import { clickhouse } from "./click_house/index.js";
+import { clickhouse } from "./click_house/clickHouse.js";
 import { Kafka } from "kafkajs";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import {v4 as uuidv4} from "uuid";
+import { v4 as uuidv4 } from "uuid";
+import dotenv from "dotenv";
 
 import userRouter from "./routes/user.route.js";
 import projectRouter from "./routes/project.route.js";
 import verifyToken from "./middleware/auth.middleware.js";
 
+dotenv.config();
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 const port = 8001;
 
 const __filename = fileURLToPath(import.meta.url);
@@ -23,8 +32,6 @@ const __dirname = path.dirname(__filename);
 const KAFKA_BROKER = process.env.KAFKA_BROKER;
 const KAFKA_USERNAME = process.env.KAFKA_USERNAME;
 const KAFKA_PASSWORD = process.env.KAFKA_PASSWORD;
-
-
 
 const kafka = new Kafka({
   clientId: `api-server`,
@@ -74,7 +81,7 @@ async function initKafkaConsumer() {
             values: [
               {
                 event_id: uuidv4(),
-                deployment_id:DEPLOYMENT_ID,
+                deployment_id: DEPLOYMENT_ID,
                 log,
               },
             ],

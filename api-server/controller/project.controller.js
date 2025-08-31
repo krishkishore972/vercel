@@ -2,7 +2,7 @@ import { prismaClient } from "../db/prismaClient.js";
 import { projectSchema } from "../zodSchema.js";
 import { generateSlug } from "random-word-slugs";
 import { ECSClient, RunTaskCommand } from "@aws-sdk/client-ecs";
-import { clickhouse } from "../click_house/index.js";
+import { clickhouse } from "../click_house/clickHouse.js";
 
 const ecsClient = new ECSClient({
   region: process.env.AWS_REGION,
@@ -11,7 +11,6 @@ const ecsClient = new ECSClient({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 });
-
 
 function isValid_GIT_Repository(str) {
   // Regex to check valid
@@ -54,6 +53,7 @@ export const createProject = async (req, res) => {
         subDomain: generateSlug(),
         userId: req.userId,
       },
+      include: { deployments: true },
     });
     res.status(200).json({ success: true, project });
   } catch (error) {
@@ -64,15 +64,15 @@ export const createProject = async (req, res) => {
 export const deployProject = async (req, res) => {
   try {
     const { projectId } = req.body;
+
     const project = await prismaClient.project.findUnique({
-      where: {
-        id: projectId,
-      },
+      where: { id: projectId },
     });
+
     if (!project) {
-      return res.status(400).json({ message: "project not found" });
+      return res.status(404).json({ message: "Project not found" });
     }
-    // Check if there is no running deployement
+
     const deployment = await prismaClient.deployment.create({
       data: {
         project: { connect: { id: projectId } },
@@ -80,34 +80,46 @@ export const deployProject = async (req, res) => {
       },
     });
 
-    // add to env
+    const requiredEnv = [
+      "ECS_CLUSTER_ARN",
+      "ECS_TASK_DEFINITION_ARN",
+      "AWS_VPC_SUBNETS",
+      "AWS_SECURITY_GROUP",
+      "AWS_REGION",
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY",
+      "AWS_S3_BUCKET_NAME",
+      "KAFKA_BROKER",
+      "KAFKA_USERNAME",
+      "KAFKA_PASSWORD",
+    ];
 
+    for (const key of requiredEnv) {
+      if (!process.env[key]) {
+        throw new Error(`Missing environment variable: ${key}`);
+      }
+    }
 
-
-    const config = {
-      CLUSTER: process.env.ECS_CLUSTER_ARN,
-      TASK: process.env.ECS_TASK_DEFINITION_ARN,
-    };
     const subnets = process.env.AWS_VPC_SUBNETS.split(",");
     const securityGroups = [process.env.AWS_SECURITY_GROUP];
 
-    //spin the container
+    // Step 4: ECS task config
     const command = new RunTaskCommand({
-      cluster: config.CLUSTER,
-      taskDefinition: config.TASK,
+      cluster: process.env.ECS_CLUSTER_ARN,
+      taskDefinition: process.env.ECS_TASK_DEFINITION_ARN,
       launchType: "FARGATE",
       count: 1,
       networkConfiguration: {
         awsvpcConfiguration: {
           assignPublicIp: "ENABLED",
-          subnets: subnets,
-          securityGroups: securityGroups,
+          subnets,
+          securityGroups,
         },
       },
       overrides: {
         containerOverrides: [
           {
-            name: "builder-task",
+            name: "builder-task", // container name in ECS task definition
             environment: [
               { name: "GIT_REPOSITORY_URL", value: project.gitURL },
               { name: "PROJECT_ID", value: project.id },
@@ -133,13 +145,22 @@ export const deployProject = async (req, res) => {
         ],
       },
     });
-    await ecsClient.send(command);
+
+    // Step 5: Run ECS task
+    const ecsResponse = await ecsClient.send(command);
+
+    console.log("ECS Task started:", ecsResponse.tasks?.[0]?.taskArn);
+
     return res.json({
       status: "queued",
-      data: { deploymentId: deployment.id },
+      deploymentId: deployment.id,
+      ecsTaskArn: ecsResponse.tasks?.[0]?.taskArn || null,
     });
   } catch (error) {
-    res.status(401).json({ message: "err while deploying" });
+    console.error("Deploy Error:", error);
+    res
+      .status(500)
+      .json({ message: "Error while deploying", error: error.message });
   }
 };
 

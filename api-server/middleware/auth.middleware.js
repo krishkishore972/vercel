@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { prismaClient } from "../db/prismaClient.js";
+
 
 const verifyToken = async (req, res, next) => {
      const token = req.header("Authorization");
