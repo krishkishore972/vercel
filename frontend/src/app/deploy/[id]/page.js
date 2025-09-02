@@ -21,17 +21,16 @@ export default function DeployPage() {
   const [deploymentId, setDeploymentId] = useState(null);
   const [error, setError] = useState(null);
   const [isDeployed, setIsDeployed] = useState(false);
+  const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
   // Fetch project details
   useEffect(() => {
     const fetchProject = async () => {
       try {
-        const { data } = await axios.get(
-          `http://localhost:8001/user/getProjects`,
-          {
-            headers: { Authorization: localStorage.getItem("token") },
-          }
-        );
+        const API_URL = process.env.NEXT_PUBLIC_API_URL;
+        const { data } = await axios.get(`${API_URL}/user/getProjects`, {
+          headers: { Authorization: localStorage.getItem("token") },
+        });
 
         const found = data.projects.find((p) => p.id === id);
         setProject(found);
@@ -48,8 +47,9 @@ export default function DeployPage() {
 
     const interval = setInterval(async () => {
       try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL;
         const { data } = await axios.get(
-          `http://localhost:8001/project/logs/${deploymentId}`,
+          `${API_URL}/project/logs/${deploymentId}`,
           {
             headers: { Authorization: localStorage.getItem("token") },
           }
@@ -83,7 +83,8 @@ export default function DeployPage() {
     setLogs([]);
 
     try {
-      const response = await fetch("http://localhost:8001/project/deploy", {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
+      const response = await fetch(`${API_URL}/project/deploy`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -217,7 +218,7 @@ export default function DeployPage() {
                     <p className="font-semibold">Your project is live!</p>
                   </div>
                   <a
-                    href={`http://${project.subDomain}.localhost:8000`}
+                    href={`http://${project.subDomain}.${API_URL}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 mt-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm"
@@ -279,14 +280,6 @@ export default function DeployPage() {
           </div>
         </div>
       </div>
-
-      {/* Add custom colors if not in global CSS */}
-      <style jsx global>{`
-        :root {
-          --deploy-blue: #2563eb;
-          --deploy-purple: #7c3aed;
-        }
-      `}</style>
     </div>
   );
 }

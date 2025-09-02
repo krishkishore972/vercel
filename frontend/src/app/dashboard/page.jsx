@@ -17,8 +17,9 @@ function Page() {
   useEffect(() => {
     const fetchProjects = async () => {
       try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL;
         const { data } = await axios.get(
-          "http://localhost:8001/user/getProjects",
+          `${API_URL}/user/getProjects`,
           {
             headers: {
               Authorization: localStorage.getItem("token"),
@@ -42,8 +43,9 @@ function Page() {
       setLoading(true);
 
       try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL;
         const { data } = await axios.post(
-          "http://localhost:8001/project",
+          `${API_URL}/project`,
           { name, gitURL },
           {
             headers: {

@@ -1,0 +1,30 @@
+services:
+  api-server:
+    image: vercel-api-server
+    restart: always
+    ports:
+      - "8001:8001"
+    env_file:
+      - ./api-server/.env
+    environment:
+      - NODE_ENV=production
+      - FRONTEND_URL=${FRONTEND_URL}
+    networks:
+      - app-network
+
+  s3-reverse-proxy:
+    image: vercel-s3-reverse-proxy
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./s3-reverse-proxy/.env  
+    environment:
+      - NODE_ENV=production
+      - FRONTEND_URL=${FRONTEND_URL}
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

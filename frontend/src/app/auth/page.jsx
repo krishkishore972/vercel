@@ -44,8 +44,9 @@ function Auth() {
     setIsLoading(true);
     setError("");
     try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
       const response = await axios.post(
-        "http://localhost:8001/user/register",
+        `${API_URL}/user/register`,
         { username, password },
         { withCredentials: true }
       );
@@ -78,8 +79,9 @@ function Auth() {
     setIsLoading(true);
     setError("");
     try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
       const response = await axios.post(
-        "http://localhost:8001/user/login",
+        `${API_URL}/user/login`,
         { username, password },
         { withCredentials: true }
       );
