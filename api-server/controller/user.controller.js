@@ -65,7 +65,7 @@ const login = async (req, res) => {
       return res.status(400).json({ message: "invalid username or password" });
     }
     const token = generateToken(user.id);
-    res.status(200).json({ message: "login success", token:token });
+    res.status(200).json({ message: "login success", token:token,username });
   } catch (error) {
     console.log("login err :", error);
     res.status(400).json({ message: "internel server err" });
