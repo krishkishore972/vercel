@@ -28,6 +28,14 @@ app.use( async (req, res) => {
   return proxy.web(req,res,{target:targetUrl,changeOrigin:true});
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
 proxy.on("proxyReq",(proxyReq,req,res) => {
     const url = req.url;
     if(url === "/"){

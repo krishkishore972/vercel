@@ -48,6 +48,15 @@ const kafka = new Kafka({
 
 const consumer = kafka.consumer({ groupId: "api-server-group" });
 
+
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.use("/user", userRouter);
 app.use("/project", verifyToken, projectRouter);
 
