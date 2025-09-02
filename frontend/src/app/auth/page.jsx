@@ -85,7 +85,7 @@ function Auth() {
       );
 
       localStorage.setItem("token", response.data.token);
-      localStorage.setItem("username", response.data.username);
+      localStorage.setItem("authName", response.data.authName);
       router.push("/dashboard");
 
       setUsername("");

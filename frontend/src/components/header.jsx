@@ -3,33 +3,33 @@ import { Cat, Zap, LogOut, User } from "lucide-react";
 import { Button } from "./ui/button";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 export function Header() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState("");
 
-  // Check if user is logged in on component mount
-  useEffect(() => {
-    const checkAuthStatus = () => {
-      const token = localStorage.getItem("token");
-      const authName = localStorage.getItem("username");
-      setIsLoggedIn(!!token);
-      setUsername(authName || "");
-    };
+  const checkAuthStatus = useCallback(() => {
+    const token = localStorage.getItem("token");
+    const authName = localStorage.getItem("authName");
+    setIsLoggedIn(!!token);
+    setUsername(authName || "");
+  }, []);
 
-    // Check initially
+  useEffect(() => {
     checkAuthStatus();
 
-    // Listen for storage changes (in case of login/logout from other tabs)
     const handleStorageChange = () => {
       checkAuthStatus();
     };
 
     window.addEventListener("storage", handleStorageChange);
 
-    // Also check when the page becomes visible again
+
+    const intervalId = setInterval(checkAuthStatus, 1000);
+
+
     const handleVisibilityChange = () => {
       if (!document.hidden) {
         checkAuthStatus();
@@ -38,27 +38,28 @@ export function Header() {
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    // Cleanup
+
     return () => {
       window.removeEventListener("storage", handleStorageChange);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearInterval(intervalId);
     };
-  }, [username,isLoggedIn]);
+  }, [checkAuthStatus]);
 
   const goToAuth = () => {
     router.push("/auth");
   };
 
   const handleLogout = () => {
-    // Remove auth data from localStorage
-    localStorage.removeItem("token");
-    localStorage.removeItem("username");
 
-    // Update state
+    localStorage.removeItem("token");
+    localStorage.removeItem("authName");
+
+
     setIsLoggedIn(false);
     setUsername("");
 
-    // Redirect to home page
+
     router.push("/");
   };
 
