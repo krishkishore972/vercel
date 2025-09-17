@@ -11,8 +11,7 @@ const prismaClient = new PrismaClient();
 app.use( async (req, res) => {
   const hostname = req.hostname; // a1.localhost:800
   const subdomain = hostname.split(".")[0];//a1
-  // Custom Domain - DB Query
-  // DB Query = prisma.
+
   const project = await prismaClient.project.findFirst({
     where: {
       subDomain: subdomain,
@@ -26,14 +25,6 @@ app.use( async (req, res) => {
   }
   const targetUrl = `${BASE_URL}/${id}`;
   return proxy.web(req,res,{target:targetUrl,changeOrigin:true});
-});
-
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    status: "ok",
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-  });
 });
 
 proxy.on("proxyReq",(proxyReq,req,res) => {

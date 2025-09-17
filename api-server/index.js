@@ -15,15 +15,29 @@ import verifyToken from "./middleware/auth.middleware.js";
 dotenv.config();
 
 const app = express();
-app.use(express.json());
+
+
+
+
 app.use(
   cors({
-    origin: true, // Reflects the request origin
+    origin: process.env.CLIENT_URL,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    optionsSuccessStatus: 200,
   })
 );
+
+
+
+app.use(express.json());
+
+app.use((req, res, next) => {
+  console.log("Origin:", req.headers.origin);
+  next();
+});
+
 const port = 8001;
 
 const __filename = fileURLToPath(import.meta.url);
@@ -109,5 +123,5 @@ async function initKafkaConsumer() {
 }
 initKafkaConsumer();
 app.listen(port, () => {
-  console.log("api-server is listning on port", port);
+  console.log("api-server is listning on port", port,process.env.CLIENT_URL);
 });

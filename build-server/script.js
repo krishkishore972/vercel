@@ -108,7 +108,7 @@ async function main() {
 
     console.log("All files uploaded successfully");
     await publishLog("All files uploaded successfully");
-    process.exit(0); // <-- kill container after success
+    process.exit(0);
   });
 }
 
