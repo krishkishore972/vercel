@@ -5,7 +5,7 @@ const app = express();
 const port = 8000;
 
 const proxy = new httpProxy();
-const BASE_URL = "https://s3.ap-south-1.amazonaws.com/vercel.builds/__outputs"
+const baseUrl = process.env.BASE_URL;
 const prismaClient = new PrismaClient();
 
 app.use( async (req, res) => {
@@ -23,7 +23,7 @@ app.use( async (req, res) => {
   if(!id) {
     return res.status(404).json({message:"project not found"});
   }
-  const targetUrl = `${BASE_URL}/${id}`;
+  const targetUrl = `${baseUrl}/${id}`;
   return proxy.web(req,res,{target:targetUrl,changeOrigin:true});
 });
 
