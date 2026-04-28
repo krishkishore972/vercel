@@ -1,23 +1,13 @@
-FROM ubuntu:focal
+FROM node:20-alpine
+RUN apk add --no-cache git bash
 
-RUN apt-get update
-RUN apt-get install -y curl
-RUN curl -sL https://deb.nodesource.com/setup_20.x | bash -
-RUN apt-get upgrade -y
-RUN apt-get install -y nodejs
-RUN apt-get install -y git
 
 WORKDIR /home/app
+COPY package*.json ./
+RUN npm ci
 
-COPY main.sh main.sh
-COPY script.js script.js
-COPY package*.json .
-COPY kafka.pem kafka.pem
-
-RUN npm install
+COPY . .
 
 RUN chmod +x main.sh
-RUN chmod +x script.js
 
 ENTRYPOINT ["/home/app/main.sh"]
-
