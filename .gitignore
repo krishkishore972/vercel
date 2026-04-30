@@ -9,6 +9,7 @@ lerna-debug.log*
 
 # PEM private/public key files
 *.pem
+!api-server/kafka.pem
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
