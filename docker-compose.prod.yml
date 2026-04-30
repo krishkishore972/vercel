@@ -8,7 +8,6 @@ services:
       - ./api-server/.env
     environment:
       - NODE_ENV=production
-      - FRONTEND_URL=${FRONTEND_URL}
     networks:
       - app-network
 
@@ -21,7 +20,6 @@ services:
       - ./s3-reverse-proxy/.env
     environment:
       - NODE_ENV=production
-      - FRONTEND_URL=${FRONTEND_URL}
     networks:
       - app-network
 
