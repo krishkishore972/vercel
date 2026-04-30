@@ -23,6 +23,16 @@ export default function DeployPage() {
   const [isDeployed, setIsDeployed] = useState(false);
   const API_URL_S3 = process.env.NEXT_PUBLIC_S3_PROXY_URL;
 
+  const getLiveProjectUrl = (subDomain) => {
+    const proxyUrl = API_URL_S3 || "";
+    const normalizedProxyUrl = /^https?:\/\//i.test(proxyUrl)
+      ? proxyUrl
+      : `http://${proxyUrl}`;
+    const url = new URL(normalizedProxyUrl);
+    url.hostname = `${subDomain}.${url.hostname}`;
+    return url.toString().replace(/\/$/, "");
+  };
+
   // Fetch project details
   useEffect(() => {
     const fetchProject = async () => {
@@ -218,7 +228,7 @@ export default function DeployPage() {
                     <p className="font-semibold">Your project is live!</p>
                   </div>
                   <a
-                    href={`http://${project.subDomain}.${API_URL_S3}`}
+                    href={getLiveProjectUrl(project.subDomain)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 mt-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm"
