@@ -4,6 +4,8 @@ services:
     build: ./api-server
     ports:
       - "8001:8001"
+    env_file:
+      - ./api-server/.env
     environment:
       - NODE_ENV=production
       - FRONTEND_URL=${FRONTEND_URL}
@@ -15,6 +17,8 @@ services:
     build: ./s3-reverse-proxy
     ports:
       - "8000:8000"
+    env_file:
+      - ./s3-reverse-proxy/.env
     environment:
        - NODE_ENV=production
        - FRONTEND_URL=${FRONTEND_URL}

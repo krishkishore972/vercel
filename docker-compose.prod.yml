@@ -1,6 +1,6 @@
 services:
   api-server:
-    image: kishore7569/vercel-api-server
+    image: ${DOCKERHUB_USERNAME:-kishore7569}/vercel-api-server:latest
     restart: always
     ports:
       - "8001:8001"
@@ -13,7 +13,7 @@ services:
       - app-network
 
   s3-reverse-proxy:
-    image: kishore7569/vercel-s3-reverse-proxy
+    image: ${DOCKERHUB_USERNAME:-kishore7569}/vercel-s3-reverse-proxy:latest
     restart: always
     ports:
       - "8000:8000"
