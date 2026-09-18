@@ -127,4 +127,9 @@
   body {
     @apply bg-background text-foreground;
   }
+  button:not(:disabled),
+  a,
+  [role="button"] {
+    cursor: pointer;
+  }
 }

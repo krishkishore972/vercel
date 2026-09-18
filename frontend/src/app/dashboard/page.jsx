@@ -1,38 +1,45 @@
 "use client";
 import React, { useCallback, useState, useEffect } from "react";
-import axios from "axios";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
-import { FolderOpen, GitBranch, ExternalLink, Clock, Plus } from "lucide-react";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { CreateProjectCard } from "@/components/dashboard/CreateProjectCard";
+import { ProjectsGrid } from "@/components/dashboard/ProjectsGrid";
+import { isValidGitHubURL } from "@/components/dashboard/utils";
+import { useRequireAuth } from "@/lib/auth";
+import { api } from "@/lib/api";
+import { useCopy } from "@/hooks/useCopy";
 
 function Page() {
+  const { authName } = useRequireAuth();
   const [name, setName] = useState("");
   const [gitURL, setGitURL] = useState("");
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [projects, setProjects] = useState([]);
+  const [copiedId, copyId] = useCopy();
 
-  // Fetch projects
+  const fetchProjects = useCallback(async () => {
+    try {
+      setFetching(true);
+      const { data } = await api.get("/user/getProjects");
+      setProjects(data.projects || []);
+    } catch (err) {
+      console.error("Error fetching projects", err);
+    } finally {
+      setFetching(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL;
-        const { data } = await axios.get(
-          `${API_URL}/user/getProjects`,
-          {
-            headers: {
-              Authorization: localStorage.getItem("token"),
-            },
-          }
-        );
-        setProjects(data.projects || []);
-      } catch (err) {
-        console.error("Error fetching projects", err);
-      }
-    };
-
     fetchProjects();
+  }, [fetchProjects]);
+
+  // Auto-dismiss success toast
+  useEffect(() => {
+    if (!success) return;
+    const t = setTimeout(() => setSuccess(""), 4000);
+    return () => clearTimeout(t);
   }, [success]);
 
   const handleCreateProject = useCallback(
@@ -40,183 +47,73 @@ function Page() {
       e.preventDefault();
       setError("");
       setSuccess("");
+
+      if (!name.trim() || !gitURL.trim()) {
+        setError("Please fill in all fields.");
+        return;
+      }
+      if (!isValidGitHubURL(gitURL)) {
+        setError("Enter a valid GitHub repo URL, e.g. https://github.com/user/repo");
+        return;
+      }
+
       setLoading(true);
-
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL;
-        const { data } = await axios.post(
-          `${API_URL}/project`,
-          { name, gitURL },
-          {
-            headers: {
-              Authorization: localStorage.getItem("token"),
-            },
-          }
-        );
-
-        setSuccess("Project created successfully ");
+        const { data } = await api.post("/project", {
+          name: name.trim(),
+          gitURL: gitURL.trim(),
+        });
         console.log("Project:", data.project);
-
-        // reset form
+        setSuccess(`“${name.trim()}” created — ready to deploy!`);
         setName("");
         setGitURL("");
+        fetchProjects();
       } catch (err) {
         setError(err.response?.data?.message || "Failed to create project");
       } finally {
         setLoading(false);
       }
     },
-    [name, gitURL]
+    [name, gitURL, fetchProjects]
   );
 
-  // Format Git URL to display just the username/repo
-  const formatGitURL = (url) => {
-    try {
-      const match = url.match(/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/);
-      return match ? match[1] : url;
-    } catch {
-      return url;
-    }
-  };
+  const scrollToCreate = () =>
+    document
+      .getElementById("create-project")
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  const urlOk = gitURL.trim() === "" || isValidGitHubURL(gitURL);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-slate-800 mb-2">
-          Projects Dashboard
-        </h1>
-        <p className="text-slate-600 mb-8">Manage and deploy your projects</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100/60">
+      <DashboardHeader
+        authName={authName}
+        total={projects.length}
+        fetching={fetching}
+      />
 
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Left Side - Create Project */}
-          <div className="w-full lg:w-1/3">
-            <div className="p-6 bg-white rounded-2xl shadow-lg sticky top-6">
-              <h2 className="text-xl font-bold text-center mb-6 flex items-center justify-center gap-2">
-                <Plus className="w-5 h-5" />
-                Create New Project
-              </h2>
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          <CreateProjectCard
+            name={name}
+            gitURL={gitURL}
+            loading={loading}
+            error={error}
+            success={success}
+            urlOk={urlOk}
+            onNameChange={setName}
+            onGitURLChange={setGitURL}
+            onSubmit={handleCreateProject}
+          />
 
-              <form onSubmit={handleCreateProject} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Project Name
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-deploy-blue focus:border-transparent"
-                    placeholder="My Awesome Project"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Git Repository URL
-                  </label>
-                  <input
-                    type="text"
-                    value={gitURL}
-                    onChange={(e) => setGitURL(e.target.value)}
-                    required
-                    placeholder="https://github.com/username/repository.git"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-deploy-blue focus:border-transparent"
-                  />
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-deploy-purple to-deploy-blue hover:from-deploy-purple/90 hover:to-deploy-blue/90 text-white py-2.5"
-                >
-                  {loading ? (
-                    <>
-                      <Clock className="w-4 h-4 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <FolderOpen className="w-4 h-4" />
-                      Create Project
-                    </>
-                  )}
-                </Button>
-              </form>
-
-              {error && (
-                <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
-                  {error}
-                </div>
-              )}
-              {success && (
-                <div className="mt-4 p-3 bg-green-50 text-green-700 rounded-lg text-sm">
-                  {success}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right Side - Projects List */}
-          <div className="flex-1">
-            <div className="p-6 bg-white rounded-2xl shadow-lg">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-slate-800">
-                  Your Projects
-                </h2>
-                <span className="text-sm text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                  {projects.length}{" "}
-                  {projects.length === 1 ? "project" : "projects"}
-                </span>
-              </div>
-
-              {projects.length === 0 ? (
-                <div className="text-center py-12">
-                  <FolderOpen className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-slate-600 mb-2">
-                    No projects yet
-                  </h3>
-                  <p className="text-slate-500">
-                    Create your first project to get started
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {projects.map((project) => (
-                    <Link
-                      href={`/deploy/${project.id}`}
-                      key={project.id}
-                      className="block group"
-                    >
-                      <div className="p-5 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-300 hover:border-deploy-blue/30 group-hover:scale-[1.02] h-full">
-                        <div className="flex items-start justify-between mb-4">
-                          <FolderOpen className="w-8 h-8 text-deploy-blue" />
-                          <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-deploy-blue" />
-                        </div>
-
-                        <h3 className="text-lg font-semibold text-slate-800 mb-2 truncate">
-                          {project.name}
-                        </h3>
-
-                        <div className="flex items-center text-slate-500 text-sm mb-4">
-                          <GitBranch className="w-4 h-4 mr-1" />
-                          <span className="truncate">
-                            {formatGitURL(project.gitURL)}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between items-center text-xs text-slate-400">
-                          <span>Click to deploy</span>
-                          <span className="px-2 py-1 bg-slate-100 rounded-full">
-                            ID: {project.id.slice(0, 8)}...
-                          </span>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div className="flex-1 w-full min-w-0">
+            <ProjectsGrid
+              projects={projects}
+              fetching={fetching}
+              copiedId={copiedId}
+              onCopy={copyId}
+              onCreateFirst={scrollToCreate}
+            />
           </div>
         </div>
       </div>

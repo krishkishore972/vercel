@@ -1,7 +1,8 @@
 "use client";
-import axios from "axios";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
+import { login, useRequireGuest } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,13 +21,12 @@ import {
   User,
   Lock,
   Rocket,
-  Github,
-  Mail,
   Cloud,
 } from "lucide-react";
 
 function Auth() {
   const router = useRouter();
+  const checkingAuth = useRequireGuest();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -44,18 +44,12 @@ function Auth() {
     setIsLoading(true);
     setError("");
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL;
-      const response = await axios.post(
-        `${API_URL}/user/register`,
-        { username, password },
-        { withCredentials: true }
-      );
+      const response = await api.post("/user/register", { username, password });
 
       if (response.data.message === "User already exists") {
         setError("Username already exists");
       } else {
-        localStorage.setItem("token", response.data.user.token);
-        localStorage.setItem("authName", response.data.user.username);
+        login(response.data.user.token, response.data.user.username);
 
         router.replace("/dashboard");
       }
@@ -79,15 +73,9 @@ function Auth() {
     setIsLoading(true);
     setError("");
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL;
-      const response = await axios.post(
-        `${API_URL}/user/login`,
-        { username, password },
-        { withCredentials: true }
-      );
+      const response = await api.post("/user/login", { username, password });
 
-      localStorage.setItem("token", response.data.token);
-      localStorage.setItem("authName", response.data.authName);
+      login(response.data.token, response.data.authName);
       router.push("/dashboard");
 
       setUsername("");
@@ -98,6 +86,14 @@ function Auth() {
       setIsLoading(false);
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-deploy-blue"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-slate-100">
@@ -187,6 +183,7 @@ function Auth() {
                         />
                         <button
                           type="button"
+                          aria-label={showPassword ? "Hide password" : "Show password"}
                           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
                           onClick={() => setShowPassword(!showPassword)}
                         >
@@ -221,22 +218,6 @@ function Auth() {
                       )}
                     </Button>
                   </form>
-
-                  <div className="relative my-6">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-slate-200"></div>
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-white px-2 text-slate-500">
-                        Or continue with
-                      </span>
-                    </div>
-                  </div>
-
-                  <Button variant="outline" className="w-full" type="button">
-                    <Github className="w-4 h-4 mr-2" />
-                    GitHub
-                  </Button>
                 </TabsContent>
 
                 <TabsContent value="signup" className="space-y-4">
@@ -281,6 +262,7 @@ function Auth() {
                         />
                         <button
                           type="button"
+                          aria-label={showPassword ? "Hide password" : "Show password"}
                           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
                           onClick={() => setShowPassword(!showPassword)}
                         >
