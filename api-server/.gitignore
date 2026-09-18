@@ -1,13 +1,8 @@
-node_modules
 # Keep environment variables out of version control
 .env
 
+# Prisma generated files
 /generated/prisma
 
-/generated/prisma
-
-/generated/prisma
-
-/generated/prisma
-
-/generated/prisma
+# PEM / private key files
+*.pem

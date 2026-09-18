@@ -24,7 +24,12 @@ export default function DeployPage() {
   const API_URL_S3 = process.env.NEXT_PUBLIC_S3_PROXY_URL;
 
   const getLiveProjectUrl = (subDomain) => {
-    const proxyUrl = API_URL_S3 || "";
+    const proxyUrl = (API_URL_S3 || "").replace(/\/$/, "");
+    // Render free tier can't do nested subdomains (*.*.onrender.com SSL fails),
+    // so use path mode: https://xxx.onrender.com/site/:subDomain
+    if (/onrender\.com/i.test(proxyUrl)) {
+      return `${proxyUrl}/site/${subDomain}`;
+    }
     const normalizedProxyUrl = /^https?:\/\//i.test(proxyUrl)
       ? proxyUrl
       : `http://${proxyUrl}`;

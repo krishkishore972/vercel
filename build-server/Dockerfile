@@ -10,4 +10,4 @@ COPY . .
 
 RUN chmod +x main.sh
 
-ENTRYPOINT ["/home/app/main.sh"]
+ENTRYPOINT ["/bin/bash", "/home/app/main.sh"]

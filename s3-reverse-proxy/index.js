@@ -9,8 +9,17 @@ const baseUrl = process.env.BASE_URL;
 const prismaClient = new PrismaClient();
 
 app.use( async (req, res) => {
-  const hostname = req.hostname; // a1.localhost:800
-  const subdomain = hostname.split(".")[0];//a1
+  let subdomain;
+  // Path mode for Render free tier: /site/:subDomain/* (avoids nested-subdomain SSL)
+  if (req.path.startsWith("/site/")) {
+    subdomain = req.path.split("/")[2];
+    // strip /site/:subdomain prefix so S3 sees / or /assets/...
+    req.url = req.url.replace(`/site/${subdomain}`, "") || "/";
+    if (req.url === "/") req.url = "/index.html";
+  } else {
+    const hostname = req.hostname; // a1.localhost:800
+    subdomain = hostname.split(".")[0];//a1
+  }
 
   const project = await prismaClient.project.findFirst({
     where: {
