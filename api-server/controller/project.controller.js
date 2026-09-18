@@ -12,38 +12,12 @@ const ecsClient = new ECSClient({
   },
 });
 
-function isValid_GIT_Repository(str) {
-  // Regex to check valid
-  // GIT Repository
-  let regex = new RegExp(
-    /((http|git|ssh|http(s)|file|\/?)|(git@[\w\.]+))(:(\/\/)?)([\w\.@\:/\-~]+)(\.git)(\/)?/
-  );
-
-  // if str
-  // is empty return false
-  if (str == null) {
-    return "false";
-  }
-
-  // Return true if the str
-  // matched the ReGex
-  if (regex.test(str) == true) {
-    return "true";
-  } else {
-    return "false";
-  }
-}
-
 export const createProject = async (req, res) => {
   const safeParse = projectSchema.safeParse(req.body);
   if (safeParse.error) {
     return res.status(400).json({ message: "invalid inputs" });
   }
   const { name, gitURL } = safeParse.data;
-  if (isValid_GIT_Repository(gitURL) == "false") {
-    return res.status(400).json({ message: "invalid gitURL" });
-  }
-  console.log(req.userId);
 
   try {
     const project = await prismaClient.project.create({
@@ -57,48 +31,57 @@ export const createProject = async (req, res) => {
     });
     res.status(200).json({ success: true, project });
   } catch (error) {
-    res.status(400).json({ message: "internal server err", error });
+    console.error("Create project error:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
 export const deployProject = async (req, res) => {
-  try {
-    const { projectId } = req.body;
+  const { projectId } = req.body;
 
-    const project = await prismaClient.project.findUnique({
-      where: { id: projectId },
+  if (!projectId || typeof projectId !== "string") {
+    return res.status(400).json({ message: "projectId is required" });
+  }
+
+  // Fail fast on server misconfiguration BEFORE creating a deployment row,
+  // so we never leave orphan QUEUED deployments behind.
+  const requiredEnv = [
+    "ECS_CLUSTER_ARN",
+    "ECS_TASK_DEFINITION_ARN",
+    "AWS_VPC_SUBNETS",
+    "AWS_SECURITY_GROUP",
+    "AWS_REGION",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_S3_BUCKET_NAME",
+    "KAFKA_BROKER",
+    "KAFKA_USERNAME",
+    "KAFKA_PASSWORD",
+  ];
+
+  const missingEnv = requiredEnv.filter((key) => !process.env[key]);
+  if (missingEnv.length > 0) {
+    console.error("Deploy misconfigured, missing env:", missingEnv);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+
+  let deployment = null;
+  try {
+    // Ownership check: users can only deploy their own projects.
+    const project = await prismaClient.project.findFirst({
+      where: { id: projectId, userId: req.userId },
     });
 
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    const deployment = await prismaClient.deployment.create({
+    deployment = await prismaClient.deployment.create({
       data: {
         project: { connect: { id: projectId } },
         status: "QUEUED",
       },
     });
-
-    const requiredEnv = [
-      "ECS_CLUSTER_ARN",
-      "ECS_TASK_DEFINITION_ARN",
-      "AWS_VPC_SUBNETS",
-      "AWS_SECURITY_GROUP",
-      "AWS_REGION",
-      "AWS_ACCESS_KEY_ID",
-      "AWS_SECRET_ACCESS_KEY",
-      "AWS_S3_BUCKET_NAME",
-      "KAFKA_BROKER",
-      "KAFKA_USERNAME",
-      "KAFKA_PASSWORD",
-    ];
-
-    for (const key of requiredEnv) {
-      if (!process.env[key]) {
-        throw new Error(`Missing environment variable: ${key}`);
-      }
-    }
 
     const subnets = process.env.AWS_VPC_SUBNETS.split(",");
     const securityGroups = [process.env.AWS_SECURITY_GROUP];
@@ -147,9 +130,17 @@ export const deployProject = async (req, res) => {
     });
 
     // Step 5: Run ECS task
-    const ecsResponse = await ecsClient.send(command);
-
-    console.log("ECS Task started:", ecsResponse.tasks?.[0]?.taskArn);
+    let ecsResponse;
+    try {
+      ecsResponse = await ecsClient.send(command);
+    } catch (ecsError) {
+      // ECS launch failed: don't leave the deployment stuck in QUEUED.
+      await prismaClient.deployment.update({
+        where: { id: deployment.id },
+        data: { status: "FAIL" },
+      });
+      throw ecsError;
+    }
 
     return res.json({
       status: "queued",
@@ -158,15 +149,29 @@ export const deployProject = async (req, res) => {
     });
   } catch (error) {
     console.error("Deploy Error:", error);
-    res
-      .status(500)
-      .json({ message: "Error while deploying", error: error.message });
+    res.status(500).json({ message: "Error while deploying" });
   }
 };
 
 export const getLogs = async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (!id || typeof id !== "string") {
+      return res.status(400).json({ message: "Invalid deployment id" });
+    }
+
+    // Ownership check: resolve deployment -> project -> user before
+    // touching ClickHouse. Same 404 either way so existence isn't leaked.
+    const deployment = await prismaClient.deployment.findUnique({
+      where: { id },
+      include: { project: { select: { userId: true } } },
+    });
+
+    if (!deployment || deployment.project.userId !== req.userId) {
+      return res.status(404).json({ message: "Logs not found" });
+    }
+
     const logs = await clickhouse.query({
       query: `SELECT event_id, deployment_id, log, timestamp from log_events where deployment_id = {deployment_id:String}`,
       query_params: {
@@ -179,8 +184,9 @@ export const getLogs = async (req, res) => {
       logs: rawLogs,
     });
   } catch (error) {
-    res.status(400).json({
-      message: "err while fetching logs",
+    console.error("Error while fetching logs:", error);
+    res.status(500).json({
+      message: "Internal server error",
     });
   }
 };

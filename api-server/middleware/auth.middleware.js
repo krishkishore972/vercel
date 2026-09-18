@@ -2,7 +2,11 @@ import jwt from "jsonwebtoken";
 
 
 const verifyToken = async (req, res, next) => {
-     const token = req.header("Authorization");
+     const header = req.header("Authorization");
+     // Accept both "Bearer <token>" (standard) and the raw token (legacy).
+     const token = header?.startsWith("Bearer ")
+       ? header.slice("Bearer ".length)
+       : header;
      if (!token) {
        return res.status(401).json({ error: "Access denied" });
      }

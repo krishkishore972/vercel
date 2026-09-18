@@ -41,7 +41,7 @@ const register = async (req, res) => {
     });
   } catch (error) {
     console.log("register err :", error);
-    res.status(400).json({ message: "internel server err" });
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
@@ -49,7 +49,7 @@ const login = async (req, res) => {
   try {
     const safeParse = userSchema.safeParse(req.body);
     if (safeParse.error) {
-      return res.status(400).json(safeParse.error);
+      return res.status(400).json({ error: "invalid input" });
     }
     const { username, password } = safeParse.data;
     const user = await prismaClient.user.findUnique({
@@ -68,7 +68,7 @@ const login = async (req, res) => {
     res.status(200).json({ message: "login success", token:token,authName:username });
   } catch (error) {
     console.log("login err :", error);
-    res.status(400).json({ message: "internel server err" });
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
@@ -89,7 +89,8 @@ const getAllProjects = async (req, res) => {
     });
     res.status(200).json({ projects });
   } catch (error) {
-    res.status(400).json({ message: "err while fetching projects" });
+    console.error("Error while fetching projects:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 

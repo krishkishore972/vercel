@@ -14,11 +14,15 @@ import verifyToken from "./middleware/auth.middleware.js";
 
 dotenv.config();
 
+if (!process.env.JWT_SECRET) {
+  console.error("FATAL: JWT_SECRET is not set. Refusing to start.");
+  process.exit(1);
+}
+
 const app = express();
 
 const allowedOrigins = [
   "http://localhost:3000",
-  "http://127.0.0.1:3000",
   process.env.FRONTEND_URL,
   process.env.CLIENT_URL,
 ].filter(Boolean);
@@ -27,7 +31,9 @@ app.use(
   cors({
     origin(origin, callback) {
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin) || origin.endsWith(".vercel.app")) {
+      // Exact allowlist only. Set FRONTEND_URL/CLIENT_URL in env instead of
+      // trusting broad suffix matches (e.g. any *.vercel.app tenant).
+      if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
       return callback(new Error(`Origin ${origin} is not allowed by CORS`));
@@ -43,12 +49,7 @@ app.use(
 
 app.use(express.json());
 
-app.use((req, res, next) => {
-  console.log("Origin:", req.headers.origin);
-  next();
-});
-
-const port = 8001;
+const port = process.env.PORT || 8001;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -88,7 +89,9 @@ async function initKafkaConsumer() {
   await consumer.connect();
   await consumer.subscribe({
     topic: "container-logs",
-    fromBeginning: true,
+    // Only new messages. fromBeginning:true replays the whole topic on a
+    // fresh consumer group and duplicates every row in ClickHouse.
+    fromBeginning: false,
   });
 
   await consumer.run({
@@ -99,17 +102,25 @@ async function initKafkaConsumer() {
       resolveOffset,
     }) {
       const messages = batch.messages;
-      console.log(`received messages ${messages.length} messages `);
 
       for (const message of messages) {
-        if (!message.value) {
-          continue;
-        }
-        const stringMessage = message.value.toString();
-        const { PROJECT_ID, DEPLOYMENT_ID, log } = JSON.parse(stringMessage);
-        console.log(log);
         try {
-          const { query_id } = await clickhouse.insert({
+          if (!message.value) {
+            resolveOffset(message.offset);
+            continue;
+          }
+          // A single poison message must never stall the partition:
+          // parse + validate inside try, always resolve the offset.
+          const parsed = JSON.parse(message.value.toString());
+          const { DEPLOYMENT_ID, log } = parsed ?? {};
+          if (typeof DEPLOYMENT_ID !== "string" || typeof log !== "string") {
+            console.warn(
+              `Skipping malformed log message at offset ${message.offset}`
+            );
+            resolveOffset(message.offset);
+            continue;
+          }
+          await clickhouse.insert({
             table: "log_events",
             values: [
               {
@@ -120,18 +131,45 @@ async function initKafkaConsumer() {
             ],
             format: "JSONEachRow",
           });
-          console.log(query_id);
           resolveOffset(message.offset);
-          await commitOffsetsIfNecessary(message.offset);
-          await heartbeat();
         } catch (error) {
-          console.error("Error inserting into ClickHouse:", error);
+          console.error(
+            `Skipping message at offset ${message.offset} after error:`,
+            error
+          );
+          resolveOffset(message.offset);
         }
+        await heartbeat();
       }
+      await commitOffsetsIfNecessary();
     },
   });
 }
-initKafkaConsumer();
+
+// Non-fatal with retries: the REST API stays useful (auth/projects)
+// even while the log pipeline is reconnecting.
+async function startKafkaConsumer(attempt = 0) {
+  try {
+    await initKafkaConsumer();
+    console.log("Kafka consumer running");
+  } catch (error) {
+    const delayMs = Math.min(30000, 5000 * (attempt + 1));
+    console.error(
+      `Kafka consumer failed (attempt ${attempt + 1}), retrying in ${delayMs}ms:`,
+      error
+    );
+    setTimeout(() => startKafkaConsumer(attempt + 1), delayMs);
+  }
+}
+startKafkaConsumer();
+
+// Global error handler (e.g. CORS rejections). Must stay after routes.
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  if (res.headersSent) return next(err);
+  res.status(err.status || 500).json({ message: "Internal server error" });
+});
+
 app.listen(port, () => {
-  console.log("api-server is listning on port", port,process.env.CLIENT_URL);
+  console.log("api-server is listening on port", port);
 });
