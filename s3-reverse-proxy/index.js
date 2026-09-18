@@ -17,8 +17,21 @@ app.use( async (req, res) => {
     req.url = req.url.replace(`/site/${subdomain}`, "") || "/";
     if (req.url === "/") req.url = "/index.html";
   } else {
-    const hostname = req.hostname; // a1.localhost:800
-    subdomain = hostname.split(".")[0];//a1
+    const referer = req.get("referer");
+    let refererPath = "";
+
+    try {
+      refererPath = referer ? new URL(referer).pathname : "";
+    } catch {
+      refererPath = "";
+    }
+
+    if (refererPath.startsWith("/site/")) {
+      subdomain = refererPath.split("/")[2];
+    } else {
+      const hostname = req.hostname; // a1.localhost:800
+      subdomain = hostname.split(".")[0];//a1
+    }
   }
 
   const project = await prismaClient.project.findFirst({
