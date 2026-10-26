@@ -1,13 +1,14 @@
 FROM node:20-alpine
+
 RUN apk add --no-cache git bash
 
+RUN mkdir -p /home/app && chown -R node:node /home/app
 
 WORKDIR /home/app
-COPY package*.json ./
-RUN npm ci
+COPY --chown=node:node sandbox.js ./
 
-COPY . .
+USER node
+ENV HOME=/home/app
+ENV NPM_CONFIG_CACHE=/home/app/.npm
 
-RUN chmod +x main.sh
-
-ENTRYPOINT ["/bin/bash", "/home/app/main.sh"]
+ENTRYPOINT ["node", "/home/app/sandbox.js"]

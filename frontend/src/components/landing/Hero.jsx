@@ -23,7 +23,7 @@ const stats = [
 
 const pipeline = [
   { label: "Git push detected", done: true },
-  { label: "ECS container build", done: true },
+  { label: "Docker container build", done: true },
   { label: "Assets → S3 + CDN", done: true },
   { label: "Edge URL assigned", done: false },
 ];
@@ -73,7 +73,7 @@ export function Hero({ onGetStarted }) {
           custom={2}
           className="text-lg md:text-xl text-slate-600 max-w-2xl mx-auto mt-6 leading-relaxed"
         >
-          Paste your GitHub URL, we build on AWS ECS, host on S3 and put you on
+          Paste your GitHub URL, we build in Docker, host on S3 and put you on
           a global edge URL — with live logs and zero configuration.
         </motion.p>
 
@@ -152,7 +152,7 @@ export function Hero({ onGetStarted }) {
                   </p>
                   <p className="text-slate-300">
                     <span className="text-emerald-400">✓</span> Build completed in 24s
-                    (ECS + cache)
+                    (Docker build)
                   </p>
                   <p className="text-slate-300">
                     <span className="text-emerald-400">✓</span> Uploaded 142 files to S3

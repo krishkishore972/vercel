@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "Deploy — Ship frontend apps in seconds",
   description:
-    "Connect your GitHub repo and deploy automatically. Zero-config builds on AWS ECS, hosting on S3, and a global edge URL with live logs.",
+    "Connect your GitHub repo and deploy automatically. Zero-config Docker builds, hosting on S3, and a global edge URL with live logs.",
 };
 
 export default function RootLayout({ children }) {

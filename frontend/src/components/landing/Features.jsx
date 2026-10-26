@@ -29,7 +29,7 @@ const features = [
     icon: <Zap className="w-6 h-6 text-deploy-purple" />,
     title: "Lightning Fast Builds",
     description:
-      "Containerized builds on AWS ECS with layer caching. Most apps live in under 30 seconds.",
+      "Containerized Docker builds with live logs and artifact upload to S3. Most apps build in under a minute.",
   },
   {
     icon: <Globe className="w-6 h-6 text-deploy-blue" />,

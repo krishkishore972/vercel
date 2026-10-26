@@ -11,6 +11,17 @@ services:
     networks:
       - app-network
 
+  builder-worker:
+    build: ./builder-worker
+    image: ${DOCKERHUB_USERNAME:-kishore7569}/vercel-builder-worker:latest
+    restart: always
+    env_file:
+      - ./builder-worker/.env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - app-network
+
   s3-reverse-proxy:
     image: ${DOCKERHUB_USERNAME:-kishore7569}/vercel-s3-reverse-proxy:latest
     restart: always

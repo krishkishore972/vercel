@@ -8,6 +8,11 @@ import { prismaClient } from "../db/prismaClient.js";
 export const LOG_QUEUE_NAME = "container-logs";
 export const LOG_JOB_NAME = "log-batch";
 
+const ALLOWED_DEPLOYMENT_STATUSES = new Set([
+  "IN_PROGRESS",
+  "READY",
+  "FAIL",
+]);
 const TERMINAL_DEPLOYMENT_STATUSES = new Set(["READY", "FAIL"]);
 
 let worker = null;
@@ -17,12 +22,18 @@ function createRedisConnection() {
     throw new Error("REDIS_URL is not set");
   }
 
-  return new IORedis(process.env.REDIS_URL, {
+  const connection = new IORedis(process.env.REDIS_URL, {
     // BullMQ workers use blocking commands, so they must never give up
     // reconnecting: maxRetriesPerRequest must be null.
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
   });
+
+  connection.on("error", (error) => {
+    console.error("Log worker Redis error:", error.message);
+  });
+
+  return connection;
 }
 
 function getDeploymentStatus(data) {
@@ -30,7 +41,7 @@ function getDeploymentStatus(data) {
 
   if (status === undefined) return null;
 
-  if (!TERMINAL_DEPLOYMENT_STATUSES.has(status)) {
+  if (!ALLOWED_DEPLOYMENT_STATUSES.has(status)) {
     throw new UnrecoverableError(`Invalid deployment status: ${status}`);
   }
 
@@ -102,14 +113,23 @@ export function startLogWorker() {
       }
 
       if (deploymentStatus) {
-        const result = await prismaClient.deployment.updateMany({
-          where: { id: job.data.DEPLOYMENT_ID },
-          data: { status: deploymentStatus },
-        });
+        const result =
+          deploymentStatus === "IN_PROGRESS"
+            ? await prismaClient.deployment.updateMany({
+                where: {
+                  id: job.data.DEPLOYMENT_ID,
+                  status: { in: ["QUEUED", "IN_PROGRESS"] },
+                },
+                data: { status: "IN_PROGRESS" },
+              })
+            : await prismaClient.deployment.updateMany({
+                where: { id: job.data.DEPLOYMENT_ID },
+                data: { status: deploymentStatus },
+              });
 
         if (result.count === 0) {
           console.warn(
-            `Deployment ${job.data.DEPLOYMENT_ID} not found while setting ${deploymentStatus}`
+            `Deployment ${job.data.DEPLOYMENT_ID} not updated to ${deploymentStatus}`
           );
         }
       }
@@ -131,7 +151,9 @@ export function startLogWorker() {
     console.error(`Log batch ${job?.id ?? "unknown"} failed:`, error);
 
     const maxAttempts = job?.opts?.attempts ?? 1;
-    const isFinalBatch = Boolean(job?.data?.deploymentStatus);
+    const isFinalBatch = TERMINAL_DEPLOYMENT_STATUSES.has(
+      job?.data?.deploymentStatus
+    );
 
     // If the final READY/FAIL batch is exhausted, never leave the deployment
     // stuck in IN_PROGRESS (which would make the dashboard poll forever).

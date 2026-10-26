@@ -2,7 +2,7 @@
 import { motion } from "framer-motion";
 import { Cloud } from "lucide-react";
 
-const items = ["GitHub", "AWS ECS", "Amazon S3", "Docker", "Next.js", "Edge CDN"];
+const items = ["GitHub", "Docker", "Amazon S3", "Next.js", "Edge CDN"];
 
 export function StackStrip() {
   return (

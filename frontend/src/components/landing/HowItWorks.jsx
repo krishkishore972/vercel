@@ -18,7 +18,7 @@ const steps = [
     icon: <Container className="w-5 h-5" />,
     title: "We build automatically",
     description:
-      "Every push triggers an ECS build with live streaming logs and artifact upload to S3.",
+      "Every push triggers a Docker build with live streaming logs and artifact upload to S3.",
   },
   {
     n: "03",

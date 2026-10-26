@@ -1,16 +1,8 @@
 import { prismaClient } from "../db/prismaClient.js";
 import { projectSchema } from "../zodSchema.js";
 import { generateSlug } from "random-word-slugs";
-import { ECSClient, RunTaskCommand } from "@aws-sdk/client-ecs";
 import { clickhouse } from "../click_house/clickHouse.js";
-
-const ecsClient = new ECSClient({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
-});
+import { enqueueBuild } from "../queue/buildQueue.js";
 
 export const createProject = async (req, res) => {
   const safeParse = projectSchema.safeParse(req.body);
@@ -45,17 +37,7 @@ export const deployProject = async (req, res) => {
 
   // Fail fast on server misconfiguration BEFORE creating a deployment row,
   // so we never leave orphan QUEUED deployments behind.
-  const requiredEnv = [
-    "ECS_CLUSTER_ARN",
-    "ECS_TASK_DEFINITION_ARN",
-    "AWS_VPC_SUBNETS",
-    "AWS_SECURITY_GROUP",
-    "AWS_REGION",
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
-    "AWS_S3_BUCKET_NAME",
-    "REDIS_URL",
-  ];
+  const requiredEnv = ["REDIS_URL"];
 
   const missingEnv = requiredEnv.filter((key) => !process.env[key]);
   if (missingEnv.length > 0) {
@@ -81,79 +63,26 @@ export const deployProject = async (req, res) => {
       },
     });
 
-    const subnets = process.env.AWS_VPC_SUBNETS.split(",");
-    const securityGroups = [process.env.AWS_SECURITY_GROUP];
-
-    // Step 4: ECS task config
-    const command = new RunTaskCommand({
-      cluster: process.env.ECS_CLUSTER_ARN,
-      taskDefinition: process.env.ECS_TASK_DEFINITION_ARN,
-      launchType: "FARGATE",
-      count: 1,
-      networkConfiguration: {
-        awsvpcConfiguration: {
-          assignPublicIp: "ENABLED",
-          subnets,
-          securityGroups,
-        },
-      },
-      overrides: {
-        containerOverrides: [
-          {
-            name: "builder-task", // container name in ECS task definition
-            environment: [
-              { name: "GIT_REPOSITORY_URL", value: project.gitURL },
-              { name: "PROJECT_ID", value: project.id },
-              { name: "DEPLOYMENT_ID", value: deployment.id },
-              { name: "AWS_REGION", value: process.env.AWS_REGION },
-              {
-                name: "AWS_ACCESS_KEY_ID",
-                value: process.env.AWS_ACCESS_KEY_ID,
-              },
-              {
-                name: "AWS_SECRET_ACCESS_KEY",
-                value: process.env.AWS_SECRET_ACCESS_KEY,
-              },
-              {
-                name: "AWS_S3_BUCKET_NAME",
-                value: process.env.AWS_S3_BUCKET_NAME,
-              },
-              { name: "REDIS_URL", value: process.env.REDIS_URL },
-            ],
-          },
-        ],
-      },
-    });
-
-    // Step 5: Run ECS task
-    let ecsResponse;
     try {
-      ecsResponse = await ecsClient.send(command);
-    } catch (ecsError) {
-      // ECS launch failed: don't leave the deployment stuck in QUEUED.
+      await enqueueBuild({
+        projectId: project.id,
+        deploymentId: deployment.id,
+        gitURL: project.gitURL,
+      });
+    } catch (queueError) {
+      // Queueing failed: don't leave the deployment stuck in QUEUED.
       await prismaClient.deployment.update({
         where: { id: deployment.id },
         data: { status: "FAIL" },
       });
-      throw ecsError;
+      throw queueError;
     }
 
-    // The build task publishes READY/FAIL when it finishes. Mark the
-    // deployment as in progress only while it is still QUEUED, so a very fast
-    // build cannot be downgraded by this update.
-    try {
-      await prismaClient.deployment.updateMany({
-        where: { id: deployment.id, status: "QUEUED" },
-        data: { status: "IN_PROGRESS" },
-      });
-    } catch (statusError) {
-      console.error("Failed to mark deployment IN_PROGRESS:", statusError);
-    }
-
+    // The builder worker publishes IN_PROGRESS when it actually starts the
+    // sandbox container, and READY/FAIL when the build finishes.
     return res.json({
       status: "queued",
       deploymentId: deployment.id,
-      ecsTaskArn: ecsResponse.tasks?.[0]?.taskArn || null,
     });
   } catch (error) {
     console.error("Deploy Error:", error);

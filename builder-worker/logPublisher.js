@@ -19,6 +19,11 @@ const JOB_OPTIONS = {
  * Buffers build output and publishes it to the BullMQ queue in batches.
  * Flushes are chained so batches reach Redis in the same order they were
  * produced even though queue.add() is asynchronous.
+ *
+ * Unlike the old in-container publisher, this version does not swallow
+ * publish failures. If Redis cannot accept the final status, the build job
+ * must fail so the API can mark the deployment FAIL instead of leaving it
+ * stuck in IN_PROGRESS.
  */
 export class LogPublisher {
   constructor({ projectId, deploymentId }) {
@@ -37,18 +42,24 @@ export class LogPublisher {
       throw new Error("REDIS_URL is not set");
     }
 
-    this.queue = new Queue(QUEUE_NAME, {
-      connection: new IORedis(process.env.REDIS_URL, {
-        maxRetriesPerRequest: 2,
-        enableOfflineQueue: false,
-        connectTimeout: 10000,
-      }),
+    const connection = new IORedis(process.env.REDIS_URL, {
+      maxRetriesPerRequest: 2,
+      enableOfflineQueue: false,
+      connectTimeout: 10000,
     });
+
+    connection.on("error", (error) => {
+      console.error("Build log publisher Redis error:", error.message);
+    });
+
+    this.queue = new Queue(QUEUE_NAME, { connection });
 
     await this.queue.waitUntilReady();
 
     this.flushTimer = setInterval(() => {
-      void this.flush();
+      void this.flush().catch((error) => {
+        console.error("Failed to publish log batch:", error);
+      });
     }, FLUSH_INTERVAL_MS);
     this.flushTimer.unref?.();
   }
@@ -65,37 +76,32 @@ export class LogPublisher {
       this.buffer.length >= MAX_BATCH_SIZE ||
       this.bufferedBytes >= MAX_BATCH_BYTES
     ) {
-      void this.flush();
+      void this.flush().catch((error) => {
+        console.error("Failed to publish log batch:", error);
+      });
     }
   }
 
   async flush(deploymentStatus) {
-    if (
-      !this.queue ||
-      (this.buffer.length === 0 && !deploymentStatus)
-    ) {
+    if (!this.queue || (this.buffer.length === 0 && !deploymentStatus)) {
       return this.writeChain;
     }
 
     const logs = this.buffer.splice(0, this.buffer.length);
     this.bufferedBytes = 0;
 
-    this.writeChain = this.writeChain
-      .then(() =>
-        this.queue.add(
-          JOB_NAME,
-          {
-            PROJECT_ID: this.projectId,
-            DEPLOYMENT_ID: this.deploymentId,
-            logs,
-            ...(deploymentStatus ? { deploymentStatus } : {}),
-          },
-          JOB_OPTIONS
-        )
+    this.writeChain = this.writeChain.then(() =>
+      this.queue.add(
+        JOB_NAME,
+        {
+          PROJECT_ID: this.projectId,
+          DEPLOYMENT_ID: this.deploymentId,
+          logs,
+          ...(deploymentStatus ? { deploymentStatus } : {}),
+        },
+        JOB_OPTIONS
       )
-      .catch((error) => {
-        console.error("Failed to publish log batch:", error);
-      });
+    );
 
     return this.writeChain;
   }
@@ -106,13 +112,27 @@ export class LogPublisher {
       this.flushTimer = null;
     }
 
-    // The final flush carries the terminal status in the same job as the
-    // remaining logs. With a single worker, that job is processed last.
-    await this.flush(deploymentStatus);
+    let flushError = null;
+
+    try {
+      // The final flush carries the terminal status in the same job as the
+      // remaining logs. With a single worker, that job is processed last.
+      await this.flush(deploymentStatus);
+    } catch (error) {
+      flushError = error;
+    }
 
     if (this.queue) {
-      await this.queue.close();
+      try {
+        await this.queue.close();
+      } catch (error) {
+        console.error("Failed to close log publisher queue:", error);
+      }
       this.queue = null;
+    }
+
+    if (flushError) {
+      throw flushError;
     }
   }
 }

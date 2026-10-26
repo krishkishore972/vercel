@@ -122,7 +122,7 @@ export function CreateProjectCard({
 
             <div className="mt-5 pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-1.5">
               {[
-                "Zero-config builds on ECS",
+                "Zero-config Docker builds",
                 "Live streaming logs",
                 "Edge URL + custom domains",
               ].map((t) => (

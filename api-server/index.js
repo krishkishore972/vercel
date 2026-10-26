@@ -6,6 +6,10 @@ import userRouter from "./routes/user.route.js";
 import projectRouter from "./routes/project.route.js";
 import verifyToken from "./middleware/auth.middleware.js";
 import { startLogWorker, stopLogWorker } from "./queue/logWorker.js";
+import {
+  closeBuildQueue,
+  startBuildQueueEvents,
+} from "./queue/buildQueue.js";
 
 dotenv.config();
 
@@ -64,6 +68,12 @@ try {
   console.error("Failed to start BullMQ log worker:", error);
 }
 
+try {
+  startBuildQueueEvents();
+} catch (error) {
+  console.error("Failed to start build queue events:", error);
+}
+
 // Global error handler (e.g. CORS rejections). Must stay after routes.
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
@@ -91,6 +101,7 @@ async function shutdown(signal) {
 
   try {
     await stopLogWorker();
+    await closeBuildQueue();
     await new Promise((resolve) => server.close(resolve));
     process.exit(0);
   } catch (error) {
