@@ -8,6 +8,14 @@ The project originally used AWS ECS/Fargate for builds. It now uses a
 queue-backed, long-running Docker worker so builds run on the same Docker host
 as Redis, ClickHouse, and the API.
 
+## Demo
+
+<video src="./deploy_demo_github.mp4" controls width="100%">
+  Your browser does not support embedded videos.
+</video>
+
+<p><a href="./deploy_demo_github.mp4">Watch the deployment demo</a></p>
+
 ## Features
 
 - GitHub repository deployment
