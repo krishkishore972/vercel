@@ -5,8 +5,13 @@ const app = express();
 const port = 8000;
 
 const proxy = new httpProxy();
-const baseUrl = process.env.BASE_URL;
+const baseUrl = (process.env.BASE_URL || "").replace(/\/+$/, "");
 const prismaClient = new PrismaClient();
+
+if (!baseUrl) {
+  console.error("FATAL: BASE_URL is not set for the S3 reverse proxy");
+  process.exit(1);
+}
 
 app.use( async (req, res) => {
   let subdomain;
@@ -54,6 +59,14 @@ proxy.on("proxyReq",(proxyReq,req,res) => {
     if(url === "/"){
         proxyReq.path += "index.html"
     }
+});
+
+proxy.on("error", (error, req, res) => {
+  console.error("S3 proxy error:", error);
+  if (!res.headersSent) {
+    res.writeHead(502, { "Content-Type": "text/plain" });
+  }
+  res.end("Bad gateway");
 });
 
 app.listen(port, () => {
