@@ -90,6 +90,10 @@ export function ProjectInfoCard({
               <>
                 <Rocket className="w-5 h-5" /> Redeploy project
               </>
+            ) : error ? (
+              <>
+                <Rocket className="w-5 h-5" /> Retry deploy
+              </>
             ) : deploymentId ? (
               <>
                 <Clock className="w-5 h-5 animate-pulse" /> Building…

@@ -46,11 +46,35 @@ export default function DeployPage() {
   useEffect(() => {
     if (!deploymentId) return;
 
+    const startedAt = Date.now();
+    const POLL_TIMEOUT_MS = 15 * 60 * 1000;
+
     const fetchLogs = async () => {
+      // Safety net for deployments that never publish a terminal status
+      // (build container crash, unreachable Redis, permanently failing job).
+      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+        setError("Deployment timed out. Check the build logs or try again.");
+        return true;
+      }
+
       try {
         const { data } = await api.get(`/project/logs/${deploymentId}`);
         const newLogs = data.logs || [];
         setLogs(newLogs);
+
+        // Authoritative terminal states written by the log worker.
+        if (data.status === "READY") {
+          setIsDeployed(true);
+          setError(null);
+          return true;
+        }
+        if (data.status === "FAIL") {
+          setIsDeployed(false);
+          setError("Deployment failed. Check the build logs for details.");
+          return true;
+        }
+
+        // Fallback for deployments created before status tracking.
         if (
           newLogs.some((log) =>
             log.log.includes("All files uploaded successfully")
@@ -62,6 +86,7 @@ export default function DeployPage() {
         return false;
       } catch (err) {
         console.error("Error fetching logs", err);
+        setError("Unable to load deployment logs. Please try again.");
         return true; // stop polling on error
       }
     };
@@ -141,13 +166,13 @@ export default function DeployPage() {
   }
 
   const liveUrl = getLiveProjectUrl(API_URL_S3, project.subDomain);
-  const status = isDeployed ? "live" : deploymentId ? "building" : error ? "failed" : "idle";
+  const status = isDeployed ? "live" : error ? "failed" : deploymentId ? "building" : "idle";
   const statusLabel = isDeployed
     ? "Live"
-    : deploymentId
-      ? "Building…"
-      : error
-        ? "Deploy failed"
+    : error
+      ? "Deploy failed"
+      : deploymentId
+        ? "Building…"
         : "Ready to deploy";
 
   return (
@@ -179,6 +204,7 @@ export default function DeployPage() {
               logs={logs}
               deploymentId={deploymentId}
               isDeployed={isDeployed}
+              failed={status === "failed"}
               copied={copiedLogs === "logs"}
               onCopy={copyLogs}
             />

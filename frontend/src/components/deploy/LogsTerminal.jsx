@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fadeUp } from "@/components/landing/animations";
 import { LOG_COLORS, getLogLevel } from "./utils";
 
-export function LogsTerminal({ logs, deploymentId, isDeployed, copied, onCopy }) {
+export function LogsTerminal({ logs, deploymentId, isDeployed, failed, copied, onCopy }) {
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -79,7 +79,7 @@ export function LogsTerminal({ logs, deploymentId, isDeployed, copied, onCopy })
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-400/80" />
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
                 <span className="ml-2 text-[11px] font-mono text-slate-500">
-                  {isDeployed ? "build finished" : "● streaming"}
+                  {isDeployed ? "build finished" : failed ? "build failed" : "● streaming"}
                 </span>
               </div>
               <div

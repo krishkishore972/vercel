@@ -1,5 +1,45 @@
-version: '3.8'
 services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - app-network
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8-alpine
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: default
+      # Required by the official image to allow non-localhost connections.
+      CLICKHOUSE_PASSWORD: clickhouse
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./api-server/click_house/command.sql:/docker-entrypoint-initdb.d/01-log-events.sql:ro
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    networks:
+      - app-network
+
   api-server:
     build: ./api-server
     ports:
@@ -8,9 +48,22 @@ services:
       - ./api-server/.env
     environment:
       - NODE_ENV=production
+      # Override managed-service values from .env so the local stack works
+      # out of the box. Host-run development uses the same URLs with
+      # localhost instead of the compose service names.
+      - REDIS_URL=redis://redis:6379
+      - CLICKHOUSE_HOST=http://clickhouse:8123
+      - CLICKHOUSE_USERNAME=default
+      - CLICKHOUSE_PASSWORD=clickhouse
+      - CLICKHOUSE_DATABASE=default
+      - LOG_WORKER_CONCURRENCY=1
+    depends_on:
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
     networks:
       - app-network
-
 
   s3-reverse-proxy:
     build: ./s3-reverse-proxy
@@ -19,9 +72,13 @@ services:
     env_file:
       - ./s3-reverse-proxy/.env
     environment:
-       - NODE_ENV=production
+      - NODE_ENV=production
     networks:
       - app-network
+
+volumes:
+  redis-data:
+  clickhouse-data:
 
 networks:
   app-network:

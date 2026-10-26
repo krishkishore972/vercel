@@ -16,6 +16,15 @@ import { ProjectAvatar } from "@/components/shared/ProjectAvatar";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 
 export function ProjectCard({ project, index, copied, onCopy }) {
+  const latestDeployment = project.deployments?.[0];
+  const badge =
+    {
+      READY: { status: "ready", label: "Ready" },
+      FAIL: { status: "failed", label: "Failed" },
+      IN_PROGRESS: { status: "building", label: "Building" },
+      QUEUED: { status: "building", label: "Queued" },
+    }[latestDeployment?.status] || { status: "idle", label: "Not deployed" };
+
   return (
     <motion.div
       variants={fadeUp}
@@ -39,8 +48,8 @@ export function ProjectCard({ project, index, copied, onCopy }) {
                 </span>
               </p>
             </div>
-            <StatusBadge status="ready" className="text-[11px] px-2 py-0.5 shrink-0">
-              Ready
+            <StatusBadge status={badge.status} className="text-[11px] px-2 py-0.5 shrink-0">
+              {badge.label}
             </StatusBadge>
           </div>
 

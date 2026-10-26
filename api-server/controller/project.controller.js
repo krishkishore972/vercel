@@ -54,9 +54,7 @@ export const deployProject = async (req, res) => {
     "AWS_ACCESS_KEY_ID",
     "AWS_SECRET_ACCESS_KEY",
     "AWS_S3_BUCKET_NAME",
-    "KAFKA_BROKER",
-    "KAFKA_USERNAME",
-    "KAFKA_PASSWORD",
+    "REDIS_URL",
   ];
 
   const missingEnv = requiredEnv.filter((key) => !process.env[key]);
@@ -120,9 +118,7 @@ export const deployProject = async (req, res) => {
                 name: "AWS_S3_BUCKET_NAME",
                 value: process.env.AWS_S3_BUCKET_NAME,
               },
-              { name: "KAFKA_BROKER", value: process.env.KAFKA_BROKER },
-              { name: "KAFKA_USERNAME", value: process.env.KAFKA_USERNAME },
-              { name: "KAFKA_PASSWORD", value: process.env.KAFKA_PASSWORD },
+              { name: "REDIS_URL", value: process.env.REDIS_URL },
             ],
           },
         ],
@@ -140,6 +136,18 @@ export const deployProject = async (req, res) => {
         data: { status: "FAIL" },
       });
       throw ecsError;
+    }
+
+    // The build task publishes READY/FAIL when it finishes. Mark the
+    // deployment as in progress only while it is still QUEUED, so a very fast
+    // build cannot be downgraded by this update.
+    try {
+      await prismaClient.deployment.updateMany({
+        where: { id: deployment.id, status: "QUEUED" },
+        data: { status: "IN_PROGRESS" },
+      });
+    } catch (statusError) {
+      console.error("Failed to mark deployment IN_PROGRESS:", statusError);
     }
 
     return res.json({
@@ -173,7 +181,7 @@ export const getLogs = async (req, res) => {
     }
 
     const logs = await clickhouse.query({
-      query: `SELECT event_id, deployment_id, log, timestamp from log_events where deployment_id = {deployment_id:String}`,
+      query: `SELECT event_id, deployment_id, log, timestamp from log_events where deployment_id = {deployment_id:String} ORDER BY seq ASC, timestamp ASC`,
       query_params: {
         deployment_id: id,
       },
@@ -182,6 +190,7 @@ export const getLogs = async (req, res) => {
     const rawLogs = await logs.json();
     res.status(200).json({
       logs: rawLogs,
+      status: deployment.status,
     });
   } catch (error) {
     console.error("Error while fetching logs:", error);
