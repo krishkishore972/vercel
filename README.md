@@ -10,11 +10,11 @@ as Redis, ClickHouse, and the API.
 
 ## Demo
 
-<video src="./deploy_demo_github.mp4" controls width="100%">
-  Your browser does not support embedded videos.
-</video>
-
-<p><a href="./deploy_demo_github.mp4">Watch the deployment demo</a></p>
+<p>
+  <a href="https://drive.google.com/file/d/1d8oOkkbGptiWw-fzOLXyLRuN09sGrDZr/view?usp=sharing">
+    ▶ Watch the deployment demo
+  </a>
+</p>
 
 ## Features
 
