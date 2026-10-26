@@ -52,7 +52,12 @@ function runBuild(outPutDir, publisher) {
     // which large npm install / build logs can easily exceed.
     const p = spawn(
       "bash",
-      ["-c", `cd "${outPutDir}" && npm install && npm run build`],
+      [
+        "-c",
+        // Build tools such as vite usually live in devDependencies. Force
+        // them to install even when NODE_ENV=production is inherited.
+        `cd "${outPutDir}" && npm install --include=dev && npm run build`,
+      ],
       { stdio: ["ignore", "pipe", "pipe"] }
     );
 

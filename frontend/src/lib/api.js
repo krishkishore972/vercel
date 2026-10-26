@@ -1,10 +1,11 @@
 import axios from "axios";
 import { getToken, logout } from "./auth";
+import { API_URL } from "./config";
 
 // Single axios client: base URL + auth header in one place,
 // replacing the repeated `axios.get(url, { headers: { Authorization } })` calls.
 export const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  baseURL: API_URL,
   withCredentials: true,
 });
 

@@ -11,6 +11,7 @@ import { LogsTerminal } from "@/components/deploy/LogsTerminal";
 import { getLiveProjectUrl } from "@/components/deploy/utils";
 import { useRequireAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
+import { S3_PROXY_URL } from "@/lib/config";
 import { useCopy } from "@/hooks/useCopy";
 
 export default function DeployPage() {
@@ -25,7 +26,6 @@ export default function DeployPage() {
   const [isDeployed, setIsDeployed] = useState(false);
   const [copiedId, copyIdText] = useCopy();
   const [copiedLogs, copyLogsText] = useCopy();
-  const API_URL_S3 = process.env.NEXT_PUBLIC_S3_PROXY_URL;
 
   // Fetch project details
   useEffect(() => {
@@ -165,7 +165,7 @@ export default function DeployPage() {
     );
   }
 
-  const liveUrl = getLiveProjectUrl(API_URL_S3, project.subDomain);
+  const liveUrl = getLiveProjectUrl(S3_PROXY_URL, project.subDomain);
   const status = isDeployed ? "live" : error ? "failed" : deploymentId ? "building" : "idle";
   const statusLabel = isDeployed
     ? "Live"
